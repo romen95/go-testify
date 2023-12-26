@@ -1,30 +1,58 @@
 package precode
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMainHandlerWhenCountMoreThanTotal(t *testing.T) {
-	req := http.Request{Method: http.MethodGet, URL: &url.URL{Path: "http://localhost:8080/cafe?count=5&city=moscow"}} // здесь нужно создать запрос к сервису
+	req := httptest.NewRequest(http.MethodGet, "/cafe?count=5&city=moscow", nil)
+
+	expectedCount := len(cafeList["moscow"])
 
 	responseRecorder := httptest.NewRecorder()
 	handler := http.HandlerFunc(mainHandle)
-	handler.ServeHTTP(responseRecorder, &req)
+	handler.ServeHTTP(responseRecorder, req)
 
-	// здесь нужно добавить необходимые проверки
-	countStr := req.URL.Query().Get("count")
-	count, err := strconv.Atoi(countStr)
-	if err != nil {
-		fmt.Printf("wrong count value %s\n", err.Error())
-		return
-	}
+	assert.Equal(t, http.StatusOK, responseRecorder.Code)
+	require.NotEmpty(t, responseRecorder.Body)
+	body := strings.Split(responseRecorder.Body.String(), ",")
+	assert.Len(t, body, expectedCount)
+}
 
-	assert.Len(t, cafeList[req.URL.Query().Get("city")], count)
+func TestMainHandlerWhenCorrectRequest(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/cafe?count=5&city=moscow", nil)
+
+	expectedCode := http.StatusOK
+	expectedCount := len(cafeList["moscow"])
+
+	responseRecorder := httptest.NewRecorder()
+	handler := http.HandlerFunc(mainHandle)
+	handler.ServeHTTP(responseRecorder, req)
+
+	assert.Equal(t, expectedCode, responseRecorder.Code)
+	require.NotEmpty(t, responseRecorder.Body)
+	body := strings.Split(responseRecorder.Body.String(), ",")
+	assert.Len(t, body, expectedCount)
+}
+
+func TestMainHandlerWhenIncorrectCity(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/cafe?count=5&city=vladyvostok", nil)
+
+	expectedCode := http.StatusBadRequest
+	expectedBody := `wrong city value`
+
+	responseRecorder := httptest.NewRecorder()
+	handler := http.HandlerFunc(mainHandle)
+	handler.ServeHTTP(responseRecorder, req)
+
+	assert.Equal(t, expectedCode, responseRecorder.Code)
+	require.NotEmpty(t, responseRecorder.Body)
+	body := responseRecorder.Body.String()
+	assert.Equal(t, expectedBody, body)
 }
